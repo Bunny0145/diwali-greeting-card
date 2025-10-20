@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Happy Diwali, Panda!</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Tone.js for sound effects (keeping for crackers) --><script src="https://unpkg.com/tone@14.8.49/build/Tone.js"></script>
+    <!-- Load Lucide Icons --><script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Load Inter Font --><link href="https://fonts.googleapis.com/css2?family=Inter:wght400;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* Define a rich, dark background for a night-time look */
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(180deg, #1f1d36 0%, #0c0b1a 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            overflow: hidden; /* Hide overflow from fireworks */
+        }
+
+        /* --- Custom Diya/Lamp Style --- */
+        .diya {
+            width: 40px;
+            height: 20px;
+            background: #5A2D19; /* Clay pot color */
+            border-radius: 0 0 50% 50%;
+            position: relative;
+            box-shadow: 0 5px 10px rgba(0, 0, 0, 0.5);
+            /* Make it look clickable */
+            cursor: pointer; 
+            transform: scale(1);
+            transition: transform 0.1s;
+        }
+
+        .diya:active {
+            transform: scale(0.95);
+        }
+
+        /* Disabled Diya State - The core change for non-repeatable messages */
+        .diya.disabled {
+            opacity: 0.5;
+            cursor: default;
+            box-shadow: none;
+            transform: scale(1);
+        }
+        
+        .diya.disabled .flame {
+            background: none !important;
+            box-shadow: none !important;
+            animation: none !important;
+            width: 0;
+            height: 0;
+        }
+
+
+        .flame {
+            position: absolute;
+            top: -10px;
+            left: 50%;
+            /* Removed default transform here, it's now handled by the flicker animation */
+            width: 8px;
+            height: 12px;
+            background: radial-gradient(circle at 50% 50%, #FFD700 0%, #FF8C00 50%, transparent 100%);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            box-shadow: 0 0 10px #FFD700, 0 0 20px #FF8C00;
+            /* Animation duration will be set by JS for randomization */
+            animation: flicker 0.5s infinite alternate; 
+        }
+
+        /* Diya Flicker Effect - Now includes subtle vertical movement (translateY) */
+        @keyframes flicker {
+            from {
+                opacity: 0.9;
+                transform: translateX(-50%) scale(1) translateY(0);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) scale(1.05) translateY(-2px);
+            }
+        }
+
+        /* --- FIREWORK SKAYSHOT EXPLOSION (Burst Phase) --- */
+        /* This is the keyframe for the initial outward blast and long, slow, glittering fall */
+        @keyframes skyshot-burst {
+            0% {
+                transform: translate(-50%, -50%) scale(0);
+                opacity: 1;
+            }
+            10% {
+                /* Initial outward thrust */
+                transform: translate(var(--initial-x), var(--initial-y)) scale(1);
+                opacity: 1;
+            }
+            100% {
+                /* Particles fall SLOWLY and fade out */
+                transform: translate(var(--final-x), var(--final-y)) scale(0.8); 
+                opacity: 0;
+            }
+        }
+
+        .firework-particle {
+            position: absolute;
+            border-radius: 50%;
+            background-color: white; 
+            /* Base animation setting. Increased duration to 4.0s for slower effect. */
+            animation: skyshot-burst 4.0s cubic-bezier(0.25, 0.46, 0.45, 0.94) both; 
+            z-index: 50;
+        }
+
+        /* --- FIREWORK ROCKET LAUNCH (Projectile Phase) --- */
+        @keyframes launch {
+            from {
+                /* Starts at the bottom of the screen (0 vertical translation relative to its 'bottom: 0' anchor) */
+                transform: translateY(0);
+                opacity: 1;
+            }
+            to {
+                /* Travels up 85% of the viewport height for a higher skyshot look */
+                transform: translateY(-85vh); 
+                opacity: 0.8;
+            }
+        }
+
+        .firework-rocket {
+            position: absolute;
+            width: 3px;
+            height: 15px;
+            background-color: white;
+            box-shadow: 0 0 10px #F8F8FF;
+            bottom: 0; /* Start anchored to the bottom */
+            /* Increased duration to 1.8s for slower launch */
+            animation: launch 1.8s ease-out forwards; 
+            z-index: 50;
+        }
+        
+        /* --- ROCKET TRAIL PARTICLES (Glitter Effect) --- */
+        @keyframes trail-fade {
+            to {
+                opacity: 0;
+                transform: scale(0.1) translateY(30px); /* Increased drop for a lingering trail effect */
+            }
+        }
+
+        .rocket-trail-particle {
+            position: absolute;
+            border-radius: 50%;
+            bottom: 0; 
+            z-index: 49; /* Below the rocket (50) and explosion (50) */
+            /* Animation duration will now be set inline in JS for sparkle variation */
+            animation-name: trail-fade;
+            animation-fill-mode: forwards;
+            animation-timing-function: ease-out; /* Use ease-out for a softer fade */
+        }
+
+        /* Ensure the modal overlay covers everything */
+        #splash-screen {
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    
+    <!-- MANDATORY: HTML Audio Element for Background Music -->
+    <!-- REPLACE 'YOUR_MUSIC_FILE_URL' BELOW with the direct Dropbox link (starting with https://dl.dropboxusercontent.com/s/...) -->
+    <audio id="background-music" loop preload="auto" volume="0.2">
+        <source src="https://dl.dropboxusercontent.com/scl/fi/po77lrwv85pav6caalyvw/jethalal-sings-happy-diwali-taarak-mehta-ka-oolta-chashmah-happ-made-with-Voicemod.mp3?rlkey=spa74i59rkmqpfwy3w2rez2el&st=rdiiiqgb&dl=1" type="audio/mp3">
+        <!-- Fallback message if audio fails -->
+        Your browser does not support the audio element.
+    </audio>
+
+    <!-- Splash Screen / Personalization Modal (Initial View) -->
+    <div id="splash-screen" class="fixed inset-0 bg-gray-900/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-white text-center">
+        
+        <div id="card-box" class="bg-gray-800 p-8 sm:p-10 rounded-3xl shadow-2xl max-w-sm w-full border-2 border-yellow-500/50 relative">
+            <i data-lucide="sparkles" class="w-12 h-12 mx-auto text-yellow-400 mb-4 animate-pulse"></i>
+            <h1 class="text-3xl font-extrabold text-yellow-500 mb-6">Diwali Challenge!</h1>
+            
+            <!-- Riddle Section (Step 1) -->
+            <div id="riddle-section">
+                <p class="mb-4 text-gray-300">
+                    Solve this riddle to unlock the greeting card: 
+                    <span class="font-bold text-yellow-400 block mt-2 text-xl">Kya papad cooler ke saamne aane se udega____?</span>
+                </p>
+
+                <input type="text" id="answer-input" placeholder="Your Answer (e.g., Haan ya naa)" class="w-full p-3 mb-3 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-4 focus:ring-yellow-600 border-2 border-transparent transition duration-200 text-lg font-bold text-center" maxlength="20">
+                
+                <p id="answer-feedback" class="h-4 mb-4 text-center font-medium transition duration-300 opacity-0"></p>
+
+                <button id="submit-answer-button" class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg shadow-blue-500/40 transition duration-300 transform hover:scale-[1.02]">
+                    <span class="flex items-center justify-center">
+                        <i data-lucide="lock" class="w-5 h-5 mr-2" id="lock-icon"></i> Submit Answer
+                    </span>
+                </button>
+            </div>
+
+            <!-- Card Form Section (Step 2 - Initially hidden) -->
+            <div id="card-form-section" class="hidden">
+                <p class="mb-4 text-gray-300">Success! Abb apna naam btaee : priyee</p>
+
+                <input type="text" id="recipient-input" class="w-full p-3 mb-6 rounded-lg bg-gray-700 text-white placeholder-gray-400 focus:ring-4 focus:ring-yellow-600 border-2 border-transparent transition duration-200 text-lg font-bold text-center" maxlength="20">
+                
+                <button id="view-card-button" class="w-full py-3 bg-yellow-600 hover:bg-yellow-500 text-gray-900 font-bold rounded-xl shadow-lg shadow-yellow-500/40 transition duration-300 transform hover:scale-[1.02]">
+                    <span class="flex items-center justify-center">
+                        <i data-lucide="gift" class="w-5 h-5 mr-2"></i> View Personalized Card
+                    </span>
+                </button>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Main Diwali Card (Hidden until button click) --><div id="diwali-card" class="bg-gray-800 p-8 sm:p-12 md:p-16 rounded-3xl shadow-2xl max-w-3xl w-full text-white text-center transform scale-90 opacity-0 transition-all duration-1000">
+
+        <!-- Header --><h2 id="recipient-greeting" class="text-3xl sm:text-4xl font-extrabold text-yellow-400 drop-shadow-lg mb-2"></h2>
+        <p class="text-lg sm:text-xl font-light text-gray-300 mb-8">May the light of the Diyas brighten your life.</p>
+
+        <!-- Diya Border Row (Top) -->
+        <div class="flex justify-center space-x-4 mb-10">
+            <!-- Diya 1: Prosperity (Index 0) -->
+            <div class="diya" data-diya-index="0"><div class="flame"></div></div>
+            <!-- Diya 2: Health (Index 1) -->
+            <div class="diya" data-diya-index="1"><div class="flame"></div></div>
+            <!-- Diya 3: New Beginnings (Index 2) -->
+            <div class="diya" data-diya-index="2"><div class="flame"></div></div>
+        </div>
+
+        <!-- Main Wish Area --><div class="bg-yellow-900/20 p-6 rounded-2xl border-2 border-yellow-600/50 mb-6">
+            <p class="text-4xl sm:text-6xl font-black text-yellow-500 mb-4 animate-bounce-slow">Happy Diwali!</p>
+            <p class="text-md sm:text-lg text-gray-200 italic leading-relaxed">
+                "Iss diwali meri dua hai ki tumhari zindagi khusiyon se bhar jaaye, jaise diye ki roshni chamakti hai vaise hi tum har pal muskurao
+"
+            </p>
+        </div>
+        
+        <!-- NEW DIYA CLICK INSTRUCTION -->
+        <p class="text-sm italic text-yellow-300/80 mb-6 animate-pulse">
+            ✨ Tip: Try **clicking on the Diyas once** to reveal messages starting from top!
+        </p>
+
+        <!-- Diya Border Row (Bottom) -->
+        <div class="flex justify-center space-x-4">
+            <!-- Diya 4: Courage (Index 3) -->
+            <div class="diya" data-diya-index="3"><div class="flame"></div></div>
+            <!-- Diya 5: Harmony (Index 4) -->
+            <div class="diya" data-diya-index="4"><div class="flame"></div></div>
+            <!-- Diya 6: Wisdom (Index 5) -->
+            <div class="diya" data-diya-index="5"><div class="flame"></div></div>
+        </div>
+
+        <!-- Footer --><p class="mt-10 text-md sm:text-lg font-semibold text-pink-300">
+            <i data-lucide="heart" class="w-5 h-5 inline-block mr-1 fill-pink-300"></i>
+            With love, from your special sender.
+        </p>
+
+    </div>
+
+    <!-- Fireworks Container --><div id="fireworks-container" class="fixed inset-0 pointer-events-none z-40"></div>
+    
+    <!-- Small Message in the Corner (Signature/Watermark) -->
+    <div id="corner-message" class="fixed bottom-4 right-4 z-50 text-xs text-white/70 bg-black/40 px-3 py-1.5 rounded-xl backdrop-blur-sm hidden opacity-0 transition-opacity duration-1000">
+        Created with ❤️ for a special Diwali.
+    </div>
+
+    <!-- Diya Click Message Box -->
+    <div id="diya-message-box" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-4 bg-yellow-500 text-gray-900 text-xl font-bold rounded-xl shadow-2xl z-50 opacity-0 pointer-events-none transition-all duration-500 scale-90">
+        <!-- Message content is injected here -->
+    </div>
+
+    <script>
+        // DOM Elements
+        const splashScreen = document.getElementById('splash-screen');
+        const viewCardButton = document.getElementById('view-card-button');
+        const recipientInput = document.getElementById('recipient-input');
+        const diwaliCard = document.getElementById('diwali-card');
+        const recipientGreeting = document.getElementById('recipient-greeting');
+        const fireworksContainer = document.getElementById('fireworks-container');
+        const cardBox = document.getElementById('card-box'); 
+        const cornerMessage = document.getElementById('corner-message');
+        const backgroundMusic = document.getElementById('background-music');
+
+        // Riddle/Gate Elements
+        const riddleSection = document.getElementById('riddle-section');
+        const cardFormSection = document.getElementById('card-form-section');
+        const answerInput = document.getElementById('answer-input');
+        const submitAnswerButton = document.getElementById('submit-answer-button');
+        const answerFeedback = document.getElementById('answer-feedback');
+        const lockIcon = document.getElementById('lock-icon'); 
+        
+        // New DOM element for the message box
+        const diyaMessageBox = document.getElementById('diya-message-box'); 
+        
+        // --- QUIZ LOGIC ---
+        const CORRECT_ANSWER = "haan";
+
+        function showFeedback(message, isCorrect) {
+            answerFeedback.textContent = message;
+            answerFeedback.classList.remove('opacity-0', 'text-red-400', 'text-green-400');
+            answerFeedback.classList.add(isCorrect ? 'text-green-400' : 'text-red-400', 'opacity-100');
+        }
+
+        function handleRiddleSubmit() {
+            const userAnswer = answerInput.value.trim().toLowerCase();
+            
+            if (userAnswer === CORRECT_ANSWER) {
+                showFeedback("Correct! The card is unlocked. Enter the name now.", true);
+                
+                // Switch sections
+                riddleSection.classList.add('hidden');
+                cardFormSection.classList.remove('hidden');
+                
+                // Update the main header to reflect the unlocked state
+                document.querySelector('#card-box h1').textContent = "Personalize Greeting";
+
+                // Update the icon and text on the submit button for visual feedback (though it's hidden)
+                lockIcon.setAttribute('data-lucide', 'lock-open');
+                lucide.createIcons(); // Re-render the icon
+                
+                // Focus on the name input field
+                recipientInput.focus();
+
+            } else {
+                showFeedback("Incorrect. Try again!", false);
+                answerInput.classList.add('border-red-500');
+                
+                setTimeout(() => {
+                    answerInput.classList.remove('border-red-500');
+                    answerFeedback.classList.remove('opacity-100');
+                    answerFeedback.classList.add('opacity-0');
+                }, 1500); 
+            }
+        }
+        
+        // --- DIYA MESSAGES ---
+        // Each index corresponds to a specific Diya element (0 to 5) in the HTML
+        const diyaMessages = [
+            "⭐ Patli hogyi hai ajkl, paneer momos chodh diye kya?**.", // Diya 1 (Top Left)
+            "🌟 but still pretty as always",  // Diya 2 (Top Middle)
+            "✨keep smiling just like u were when u were making reel.",     // Diya 3 (Top Right)
+            "💫Good Bye",    // Diya 4 (Bottom Left)
+        ];
+
+        // --- TONE.JS AUDIO SETUP (Only for Cracker Sound Effects) ---
+        
+        // 1. Cracker/Explosion Sound Synth (Noise)
+        const noise = new Tone.NoiseSynth({
+            volume: -17, 
+            noise: {
+                type: "pink" 
+            },
+            envelope: {
+                attack: 0.001,
+                decay: 0.2, 
+                sustain: 0,
+                release: 0.05
+            }
+        }).toDestination();
+
+        function createCrackerSound() {
+            // Check if Tone.js is running (it needs to be initialized by a user click)
+            if (Tone.context.state === 'running') {
+                 noise.triggerAttackRelease("4n", Tone.now()); 
+            } else {
+                // Initialize Tone.js engine on first sound attempt
+                Tone.start().then(() => {
+                    noise.triggerAttackRelease("4n", Tone.now());
+                });
+            }
+        }
+        
+        // --- DIYA ANIMATION SETUP ---
+        function setupDiyaAnimations() {
+            const flames = document.querySelectorAll('.flame');
+            flames.forEach((flame, index) => {
+                flame.style.animationDelay = `${index * 0.1}s`;
+                flame.style.animationDuration = `${0.4 + Math.random() * 0.3}s`;
+            });
+        }
+
+        // --- DIYA INTERACTION LOGIC ---
+
+        // Helper function to show the message box
+        function showDiyaMessage(message, duration = 3000) {
+            diyaMessageBox.innerHTML = message; // Use innerHTML to allow for bolding from the messages
+            
+            // Show the box (opacity and scale up)
+            diyaMessageBox.classList.remove('opacity-0', 'pointer-events-none', 'scale-90');
+            diyaMessageBox.classList.add('opacity-100', 'scale-100');
+            
+            // Hide the box after specified duration
+            setTimeout(() => {
+                diyaMessageBox.classList.remove('opacity-100', 'scale-100');
+                diyaMessageBox.classList.add('opacity-0', 'scale-90');
+                // Re-add pointer-events-none after transition finishes
+                setTimeout(() => {
+                    diyaMessageBox.classList.add('pointer-events-none');
+                }, 500); 
+            }, duration); 
+        }
+
+        function handleDiyaClick(event) {
+            const clickedDiya = event.currentTarget; 
+            
+            // 1. Check if already clicked/disabled
+            if (clickedDiya.classList.contains('disabled')) {
+                // Check if all are disabled to show a final message
+                if (document.querySelectorAll('.diya:not(.disabled)').length === 0) {
+                    showDiyaMessage("All blessings revealed! Happy Diwali!", 1500);
+                }
+                return; // Exit if already disabled
+            }
+            
+            // 2. Get the unique message index
+            const index = parseInt(clickedDiya.getAttribute('data-diya-index'));
+            
+            if (!isNaN(index) && index >= 0 && index < diyaMessages.length) {
+                showDiyaMessage(diyaMessages[index]);
+                
+                // 3. Disable the Diya after showing the message (NON-REPEATING ENFORCED HERE)
+                clickedDiya.classList.add('disabled');
+                
+                // 4. Update the Tip message if all are disabled
+                if (document.querySelectorAll('.diya:not(.disabled)').length === 0) {
+                     document.querySelector('.animate-pulse').textContent = "All unique blessings revealed! May they guide you.";
+                }
+
+            } else {
+                showDiyaMessage("A beautiful light shines upon you!"); 
+            }
+        }
+
+
+        // --- FIREWORKS LOGIC ---
+
+        const FIREWORK_COLORS = ['#FFD700', '#FF4500', '#ADFF2F', '#1E90FF', '#FF1493', '#F8F8FF'];
+
+        function createSkyshotParticle(x, y, angle, distance, size, duration, color) {
+            const particle = document.createElement('div');
+            particle.className = 'firework-particle';
+            particle.style.backgroundColor = color;
+            particle.style.width = `${size}px`;
+            particle.style.height = `${size}px`;
+            
+            particle.style.left = `${x}px`;
+            particle.style.top = `${y}px`;
+
+            const initialX = 0;
+            const initialY = 0;
+            const finalX = distance * Math.cos(angle);
+            const finalY = distance * Math.sin(angle) + 400; 
+
+            particle.style.setProperty('--initial-x', `${initialX}px`);
+            particle.style.setProperty('--initial-y', `${initialY}px`);
+            particle.style.setProperty('--final-x', `${finalX}px`);
+            particle.style.setProperty('--final-y', `${finalY}px`);
+
+            particle.style.animationDuration = `${duration}s`;
+            particle.style.animationDelay = `${Math.random() * 0.1}s`; 
+
+            fireworksContainer.appendChild(particle);
+            particle.addEventListener('animationend', () => {
+                particle.remove();
+            });
+        }
+        
+        function createRocketTrailParticle(x) {
+            const particle = document.createElement('div');
+            particle.className = 'rocket-trail-particle';
+            
+            const size = Math.random() * 3 + 1;
+            const color = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+            const duration = Math.random() * 0.3 + 0.4;
+
+            particle.style.width = `${size}px`;
+            particle.style.height = `${size}px`;
+            particle.style.backgroundColor = color;
+            
+            particle.style.left = `${x + (Math.random() - 0.5) * 5}px`; 
+            
+            particle.style.animationDuration = `${duration}s`;
+            
+            fireworksContainer.appendChild(particle);
+            
+            setTimeout(() => particle.remove(), duration * 1000); 
+        }
+
+
+        function createFirework(x, y) {
+            createCrackerSound(); 
+            const primaryColor = FIREWORK_COLORS[Math.floor(Math.random() * FIREWORK_COLORS.length)];
+            
+            // 1. Primary Shell Burst 
+            const FLOWER_SPOKES = 24; 
+            const FLOWER_DISTANCE = 300; 
+            for (let i = 0; i < FLOWER_SPOKES; i++) {
+                const angle = i * (2 * Math.PI / FLOWER_SPOKES); 
+                
+                for(let j = 0; j < 2; j++) { 
+                    const distance = FLOWER_DISTANCE * (0.8 + Math.random() * 0.2); 
+                    const angleJitter = (Math.random() - 0.5) * (Math.PI / 72); 
+                    
+                    createSkyshotParticle(
+                        x, y, 
+                        angle + angleJitter, 
+                        distance, 
+                        4,            
+                        2.8,          
+                        primaryColor
+                    );
+                }
+            }
+
+            // 2. Secondary Glitter/Trail
+            const GLITTER_COUNT = 60; 
+            const GLITTER_DISTANCE = 150; 
+            const glitterColor = '#FFFFFF'; 
+            for (let i = 0; i < GLITTER_COUNT; i++) {
+                const angle = Math.random() * 2 * Math.PI;
+                const distance = Math.random() * GLITTER_DISTANCE;
+                
+                createSkyshotParticle(
+                    x, y, 
+                    angle, 
+                    distance, 
+                    3,           
+                    4.5,         
+                    glitterColor
+                );
+            }
+        }
+        
+        function createProjectile() {
+            const x = Math.random() * window.innerWidth * 0.8 + window.innerWidth * 0.1;
+            const flightDuration = 1.8 + Math.random() * 0.4; 
+
+            const rocket = document.createElement('div');
+            rocket.className = 'firework-rocket';
+            rocket.style.left = `${x}px`;
+            rocket.style.animationDuration = `${flightDuration}s`;
+            
+            fireworksContainer.appendChild(rocket);
+
+            const trailInterval = setInterval(() => {
+                createRocketTrailParticle(x);
+            }, 50); 
+
+            setTimeout(() => {
+                clearInterval(trailInterval);
+            }, flightDuration * 1000 * 0.9); 
+
+            rocket.addEventListener('animationend', () => {
+                rocket.remove();
+                
+                const finalY = window.innerHeight * 0.15 + (Math.random() * 70); 
+                
+                createFirework(x, finalY); 
+            });
+        }
+        
+        function launchCrackerLoop() {
+            createProjectile();
+        }
+
+        // --- EVENT HANDLERS ---
+        
+        // Function to show the card and hide the splash screen
+        function revealCard() {
+            // 1. START BACKGROUND MUSIC
+            // HTML audio must be started from a user-initiated event (like a click)
+            backgroundMusic.volume = 0.2; // Keep volume low
+            backgroundMusic.play().catch(error => {
+                console.error("Failed to play audio:", error);
+                // Fallback or user instruction here if autoplay is blocked
+            });
+
+
+            // Get and format the recipient's name
+            let name = recipientInput.value.trim() || 'Dear Friend';
+            if (name.length > 0) {
+                name = name.charAt(0).toUpperCase() + name.slice(1);
+            }
+
+            recipientGreeting.textContent = `Happy Diwali, ${name}!`;
+
+            // 2. SHOW CORNER MESSAGE
+            cornerMessage.classList.remove('hidden'); 
+            cornerMessage.classList.add('opacity-100'); 
+            
+            // 3. Hide splash screen and show card with animation
+            splashScreen.classList.add('opacity-0', 'pointer-events-none');
+            diwaliCard.classList.remove('scale-90', 'opacity-0');
+            diwaliCard.classList.add('scale-100', 'opacity-100');
+            
+            // 4. Set up Diya animations to create a natural, non-synchronized flicker
+            setupDiyaAnimations();
+            
+            // 5. SETUP DIYA CLICK LISTENERS
+            const allDiyas = document.querySelectorAll('.diya');
+            allDiyas.forEach(diya => {
+                diya.addEventListener('click', handleDiyaClick);
+            });
+
+            // 6. Start repeating cracker launch animation
+            setInterval(launchCrackerLoop, 2500); 
+        }
+
+        // Attach event listener to the button (click now works immediately)
+        viewCardButton.addEventListener('click', revealCard);
+        submitAnswerButton.addEventListener('click', handleRiddleSubmit);
+
+        // Allow pressing Enter key in the input to submit the riddle answer
+        answerInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleRiddleSubmit();
+            }
+        });
+
+        // Allow pressing Enter key in the recipient input to view the card
+        recipientInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                revealCard();
+            }
+        });
+
+        // Initialize icons on window load
+        window.onload = () => {
+             lucide.createIcons();
+             // Focus on the first input (riddle answer) on load
+             answerInput.focus(); 
+        }
+
+    </script>
+
+</body>
+</html>
